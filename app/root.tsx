@@ -7,10 +7,28 @@ import {
 } from "@remix-run/react";
 import type { LinksFunction } from "@remix-run/node";
 import "./tailwind.css";
+import { json, redirect, type LoaderFunctionArgs } from "@remix-run/node";
+import { getUserId, getUserType } from "~/utils/session.server";
 
 export const links: LinksFunction = () => {
   return [];
 };
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  const userId = await getUserId(request);
+  const url = new URL(request.url);
+  
+  if (!userId && url.pathname !== "/login") {
+    throw redirect("/login");
+  }
+  
+  if (userId && url.pathname === "/login") {
+    throw redirect("/dashboard");
+  }
+
+  const userType = userId ? await getUserType(request) : null;
+  return json({ userId, role: userType });
+}
 
 export default function App() {
   return (

@@ -1,44 +1,136 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
-import { requireUserId } from "~/utils/session.server";
 import { db } from "~/utils/db.server";
-import type { Device } from "~/types/device";
+import { requireUser } from "~/utils/auth.server";
+
+interface LoaderData {
+  totalDevices: number;
+  devicesByLocation: Array<{
+    location: string;
+    count: number;
+  }>;
+  devicesByPrimaryTag: Array<{
+    tagName: string;
+    count: number;
+  }>;
+  recentDevices: Array<{
+    id: number;
+    name: string;
+    serialNumber: string;
+    location: string;
+    primaryTag: {
+      name: string;
+    };
+    secondaryTag: {
+      name: string;
+    };
+    createdAt: string;
+  }>;
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  await requireUserId(request);
-  
-  // 获取第一页的设备数据
-  const [devices, totalCount] = await Promise.all([
+  await requireUser(request);
+
+  const [totalDevices, devicesByLocation, devicesByPrimaryTag, recentDevices] = await Promise.all([
+    db.device.count(),
+    db.device.groupBy({
+      by: ['location'],
+      _count: true,
+    }).then(results => results.map(r => ({
+      location: r.location,
+      count: r._count,
+    }))),
+    db.device.groupBy({
+      by: ['primaryTagId'],
+      _count: true,
+    }).then(async (results) => {
+      const tagCounts = await Promise.all(
+        results.map(async (r) => {
+          const tag = await db.primaryTag.findUnique({
+            where: { id: r.primaryTagId },
+            select: { name: true },
+          });
+          return {
+            tagName: tag?.name || '未知',
+            count: r._count,
+          };
+        })
+      );
+      return tagCounts;
+    }),
     db.device.findMany({
-      take: 10,
-      orderBy: {
-        updatedAt: 'desc',
+      take: 5,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        primaryTag: {
+          select: { name: true },
+        },
+        secondaryTag: {
+          select: { name: true },
+        },
       },
     }),
-    db.device.count(),
   ]);
 
-  return json({ devices, totalCount });
+  return json<LoaderData>({
+    totalDevices,
+    devicesByLocation,
+    devicesByPrimaryTag,
+    recentDevices,
+  });
 }
 
 export default function DashboardIndex() {
-  const { devices, totalCount } = useLoaderData<typeof loader>();
+  const { totalDevices, devicesByLocation, devicesByPrimaryTag, recentDevices } = useLoaderData<typeof loader>();
 
   return (
-    <div className="space-y-6">
-      <div className="sm:flex sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-white">设备列表</h1>
-          <p className="mt-2 text-sm text-gray-400">
-            共 {totalCount} 条记录
-          </p>
+    <div className="p-6 space-y-8">
+      <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
+        数据展示
+      </h1>
+
+      {/* 统计卡片 */}
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="bg-gray-800/50 rounded-lg p-6 border border-gray-700">
+          <h3 className="text-sm font-medium text-gray-400">设备总数</h3>
+          <p className="mt-2 text-3xl font-bold text-white">{totalDevices}</p>
         </div>
       </div>
 
-      <div className="mt-8 flex flex-col">
-        <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-          <div className="inline-block min-w-full py-2 align-middle">
-            <div className="overflow-hidden shadow-sm ring-1 ring-white/10 rounded-lg">
+      <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+        {/* 按位置统计 */}
+        <div className="bg-gray-800/50 rounded-lg p-6 border border-gray-700">
+          <h2 className="text-lg font-medium text-white mb-4">按位置统计</h2>
+          <div className="space-y-4">
+            {devicesByLocation.map((item) => (
+              <div key={item.location} className="flex items-center justify-between">
+                <span className="text-gray-300">{item.location}</span>
+                <span className="text-white font-medium">{item.count} 台</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 按标签统计 */}
+        <div className="bg-gray-800/50 rounded-lg p-6 border border-gray-700">
+          <h2 className="text-lg font-medium text-white mb-4">按标签统计</h2>
+          <div className="space-y-4">
+            {devicesByPrimaryTag.map((item) => (
+              <div key={item.tagName} className="flex items-center justify-between">
+                <span className="text-gray-300">{item.tagName}</span>
+                <span className="text-white font-medium">{item.count} 台</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* 最近添加的设备 */}
+      <div className="bg-gray-800/50 rounded-lg p-6 border border-gray-700">
+        <h2 className="text-lg font-medium text-white mb-4">最近添加的设备</h2>
+        <div className="overflow-x-auto">
+          <div className="inline-block min-w-full align-middle">
+            <div className="overflow-hidden shadow-sm ring-1 ring-gray-700 ring-opacity-50 rounded-lg">
               <table className="min-w-full divide-y divide-gray-700">
                 <thead className="bg-gray-800">
                   <tr>
@@ -49,49 +141,33 @@ export default function DashboardIndex() {
                       序列号
                     </th>
                     <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-white">
-                      类型
-                    </th>
-                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-white">
                       存放地点
                     </th>
                     <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-white">
-                      状态
+                      一级标签
                     </th>
                     <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-white">
-                      更新时间
+                      二级标签
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-700 bg-[#0f172a]">
-                  {devices.map((device: Device) => (
-                    <tr key={device.id}>
-                      <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm text-gray-300 sm:pl-6">
+                <tbody className="divide-y divide-gray-700 bg-gray-900/50">
+                  {recentDevices.map((device) => (
+                    <tr key={device.id} className="hover:bg-gray-800/50">
+                      <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-white sm:pl-6">
                         {device.name}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
                         {device.serialNumber}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
-                        {device.type}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
                         {device.location}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
-                        <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${
-                          device.status === 'normal' ? 'bg-green-400/10 text-green-400' :
-                          device.status === 'maintenance' ? 'bg-yellow-400/10 text-yellow-400' :
-                          device.status === 'broken' ? 'bg-red-400/10 text-red-400' :
-                          'bg-gray-400/10 text-gray-400'
-                        }`}>
-                          {device.status === 'normal' ? '正常' :
-                           device.status === 'maintenance' ? '维护中' :
-                           device.status === 'broken' ? '故障' :
-                           device.status === 'scrapped' ? '已报废' : '未知'}
-                        </span>
+                        {device.primaryTag.name}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
-                        {new Date(device.updatedAt).toLocaleString()}
+                        {device.secondaryTag.name}
                       </td>
                     </tr>
                   ))}
@@ -99,12 +175,6 @@ export default function DashboardIndex() {
               </table>
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="mt-4 flex items-center justify-between">
-        <div className="text-sm text-gray-400">
-          显示 1-{Math.min(10, totalCount)} 条，共 {totalCount} 条
         </div>
       </div>
     </div>

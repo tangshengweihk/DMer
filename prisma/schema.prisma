@@ -18,16 +18,19 @@ model User {
 }
 
 model Device {
-  id           Int         @id @default(autoincrement())
-  name         String
-  serialNumber String      @unique
-  type         String
-  location     String
-  status       String      @default("normal")
-  notes        String?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  deviceLogs   DeviceLog[]
+  id             Int          @id @default(autoincrement())
+  name           String
+  serialNumber   String       @unique
+  location       String
+  status         String       @default("normal")
+  notes          String?
+  primaryTagId   Int
+  primaryTag     PrimaryTag   @relation(fields: [primaryTagId], references: [id])
+  secondaryTagId Int
+  secondaryTag   SecondaryTag @relation(fields: [secondaryTagId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deviceLogs     DeviceLog[]
 }
 
 model DeviceLog {
@@ -39,4 +42,36 @@ model DeviceLog {
   createdAt DateTime @default(now())
   device    Device   @relation(fields: [deviceId], references: [id])
   user      User     @relation(fields: [userId], references: [id])
+}
+
+model PrimaryTag {
+  id             Int            @id @default(autoincrement())
+  name           String         @unique
+  secondaryTags  SecondaryTag[]
+  devices        Device[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model SecondaryTag {
+  id           Int        @id @default(autoincrement())
+  name         String     
+  primaryTagId Int
+  primaryTag   PrimaryTag @relation(fields: [primaryTagId], references: [id])
+  devices      Device[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([name, primaryTagId])
+}
+
+model DeviceCount {
+  id          Int      @id @default(autoincrement())
+  deviceName  String
+  location    String
+  count       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([deviceName, location])
 } 

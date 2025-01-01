@@ -1,321 +1,295 @@
-import { json, type LoaderFunctionArgs, redirect, type ActionFunctionArgs } from "@remix-run/node";
-import { Form, useLoaderData, useSearchParams, useNavigate } from "@remix-run/react";
-import { getUserType } from "~/utils/session.server";
+import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from "@remix-run/node";
+import { Form, useLoaderData, useSearchParams } from "@remix-run/react";
 import { db } from "~/utils/db.server";
-import type { Device, DeviceStatus } from "~/types/device";
+import { Layout } from "~/components/Layout";
+
+interface Location {
+  location: string;
+}
+
+interface DeviceWithTags {
+  id: number;
+  name: string;
+  serialNumber: string;
+  location: string;
+  primaryTag: {
+    name: string;
+  };
+  secondaryTag: {
+    name: string;
+  };
+}
+
+interface LoaderData {
+  primaryTags: Array<{
+    id: number;
+    name: string;
+    secondaryTags: Array<{
+      id: number;
+      name: string;
+    }>;
+  }>;
+  devices: Array<{
+    id: number;
+    name: string;
+    serialNumber: string;
+    location: string;
+    primaryTag: {
+      name: string;
+    };
+    secondaryTag: {
+      name: string;
+    };
+  }>;
+  locations: string[];
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const userType = await getUserType(request);
-  if (!userType) {
-    throw new Error("无权限访问");
-  }
-
   const url = new URL(request.url);
-  const name = url.searchParams.get("name") || undefined;
-  const serialNumber = url.searchParams.get("serialNumber") || undefined;
-  const type = url.searchParams.get("type") || undefined;
-  const location = url.searchParams.get("location") || undefined;
-  const status = url.searchParams.get("status") || undefined;
-  const page = parseInt(url.searchParams.get("page") || "1");
-  const pageSize = 10;
+  const primaryTagId = url.searchParams.get("primaryTagId");
+  const secondaryTagId = url.searchParams.get("secondaryTagId");
+  const location = url.searchParams.get("location");
 
-  const where = {
-    ...(name && { name: { contains: name } }),
-    ...(serialNumber && { serialNumber }),
-    ...(type && { type }),
-    ...(location && { location }),
-    ...(status && { status }),
-  };
-
-  const [devices, total] = await Promise.all([
-    db.device.findMany({
-      where,
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      orderBy: { updatedAt: "desc" },
+  const [primaryTags, locations] = await Promise.all([
+    db.primaryTag.findMany({
+      include: {
+        secondaryTags: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
     }),
-    db.device.count({ where }),
+    db.device.findMany({
+      select: { location: true },
+      distinct: ["location"],
+    }).then((locations: Location[]) => locations.map((l: Location) => l.location)),
   ]);
 
-  return json({
-    devices,
-    pagination: {
-      page,
-      pageSize,
-      total,
-      totalPages: Math.ceil(total / pageSize),
+  // 构建查询条件
+  const where = {
+    ...(primaryTagId ? { primaryTagId: parseInt(primaryTagId) } : {}),
+    ...(secondaryTagId ? { secondaryTagId: parseInt(secondaryTagId) } : {}),
+    ...(location ? { location } : {}),
+  };
+
+  const devices = await db.device.findMany({
+    where,
+    include: {
+      primaryTag: {
+        select: { name: true },
+      },
+      secondaryTag: {
+        select: { name: true },
+      },
     },
   });
+
+  return json<LoaderData>({ primaryTags, devices, locations });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const userType = await getUserType(request);
-  if (!userType) {
-    throw new Error("无权限访问");
-  }
-
   const formData = await request.formData();
   const intent = formData.get("intent");
 
   if (intent === "export") {
-    const url = new URL(formData.get("url") as string);
-    const name = url.searchParams.get("name") || undefined;
-    const serialNumber = url.searchParams.get("serialNumber") || undefined;
-    const type = url.searchParams.get("type") || undefined;
-    const location = url.searchParams.get("location") || undefined;
-    const status = url.searchParams.get("status") || undefined;
-
-    const where = {
-      ...(name && { name: { contains: name } }),
-      ...(serialNumber && { serialNumber }),
-      ...(type && { type }),
-      ...(location && { location }),
-      ...(status && { status }),
-    };
-
     const devices = await db.device.findMany({
-      where,
-      orderBy: { updatedAt: "desc" },
+      include: {
+        primaryTag: {
+          select: { name: true },
+        },
+        secondaryTag: {
+          select: { name: true },
+        },
+      },
     });
 
-    const getStatusText = (status: DeviceStatus): string => {
-      const statusMap: Record<DeviceStatus, string> = {
-        normal: "正常",
-        maintenance: "维护中",
-        broken: "故障",
-        scrapped: "已报废",
-      };
-      return statusMap[status];
-    };
-
-    const csvContent = [
-      ["设备名称", "设备编号", "类型", "位置", "状态", "备注", "更新时间"],
-      ...devices.map((device: Device) => [
-        device.name,
-        device.serialNumber,
-        device.type,
-        device.location,
-        getStatusText(device.status),
-        device.notes || "",
-        new Date(device.updatedAt).toLocaleString()
-      ])
-    ].map((row: (string | number)[]) => row.map(cell => `"${cell}"`).join(",")).join("\n");
+    // 添加CSV表头
+    const header = "设备名称,序列号,存放地点,一级标签,二级标签\n";
+    const csvContent = header + devices.map((device: DeviceWithTags) => 
+      `${device.name},${device.serialNumber},${device.location},${device.primaryTag.name},${device.secondaryTag.name}`
+    ).join("\n");
 
     const headers = new Headers();
     headers.set("Content-Type", "text/csv; charset=utf-8");
-    headers.set("Content-Disposition", `attachment; filename=devices-${new Date().toISOString().split("T")[0]}.csv`);
+    headers.set("Content-Disposition", 'attachment; filename="devices.csv"');
 
     return new Response(csvContent, { headers });
   }
 }
 
-export default function SearchPage() {
-  const { devices, pagination } = useLoaderData<typeof loader>();
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
+export default function DeviceSearchPage() {
+  const { primaryTags, devices, locations } = useLoaderData<typeof loader>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedPrimaryTagId = searchParams.get("primaryTagId") || "";
+  const selectedSecondaryTagId = searchParams.get("secondaryTagId") || "";
+  const selectedLocation = searchParams.get("location") || "";
 
-  const statusColors = {
-    normal: "bg-green-100 text-green-800",
-    maintenance: "bg-yellow-100 text-yellow-800",
-    broken: "bg-red-100 text-red-800",
-    scrapped: "bg-gray-100 text-gray-800",
-  };
+  const selectedPrimaryTag = primaryTags.find(
+    tag => tag.id.toString() === selectedPrimaryTagId
+  );
 
-  const statusText = {
-    normal: "正常",
-    maintenance: "维护中",
-    broken: "故障",
-    scrapped: "已报废",
-  };
+  // 按位置分组的设备
+  const devicesByLocation = devices.reduce((acc, device) => {
+    if (!acc[device.location]) {
+      acc[device.location] = [];
+    }
+    acc[device.location].push(device);
+    return acc;
+  }, {} as Record<string, typeof devices>);
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8">
-      <div className="sm:flex sm:items-center">
-        <div className="sm:flex-auto">
-          <h1 className="text-xl font-semibold text-white">设备查询</h1>
-          <p className="mt-2 text-sm text-gray-300">
-            查询设备信息
-          </p>
-        </div>
-      </div>
-
-      <Form method="get" className="mt-8 space-y-6">
-        <div className="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-3">
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-white">
-              设备名称
-            </label>
-            <div className="mt-2">
-              <input
-                type="text"
-                name="name"
-                id="name"
-                defaultValue={searchParams.get("name") || ""}
-                className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="serialNumber" className="block text-sm font-medium text-white">
-              设备编号
-            </label>
-            <div className="mt-2">
-              <input
-                type="text"
-                name="serialNumber"
-                id="serialNumber"
-                defaultValue={searchParams.get("serialNumber") || ""}
-                className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="type" className="block text-sm font-medium text-white">
-              设备类型
-            </label>
-            <div className="mt-2">
-              <input
-                type="text"
-                name="type"
-                id="type"
-                defaultValue={searchParams.get("type") || ""}
-                className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="location" className="block text-sm font-medium text-white">
-              设备位置
-            </label>
-            <div className="mt-2">
-              <input
-                type="text"
-                name="location"
-                id="location"
-                defaultValue={searchParams.get("location") || ""}
-                className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="status" className="block text-sm font-medium text-white">
-              设备状态
-            </label>
-            <div className="mt-2">
-              <select
-                id="status"
-                name="status"
-                defaultValue={searchParams.get("status") || ""}
-                className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
-              >
-                <option value="">全部</option>
-                <option value="normal">正常</option>
-                <option value="maintenance">维护中</option>
-                <option value="broken">故障</option>
-                <option value="scrapped">已报废</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex items-end">
-            <button
-              type="submit"
-              className="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500"
-            >
-              查询
-            </button>
-          </div>
-        </div>
-      </Form>
-
-      <div className="mt-8 flex justify-end">
+    <div className="p-6 space-y-8">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
+          设备查询
+        </h1>
         <Form method="post">
-          <input type="hidden" name="url" value={`${window.location.pathname}${window.location.search}`} />
+          <input type="hidden" name="intent" value="export" />
           <button
             type="submit"
-            name="intent"
-            value="export"
-            className="rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
-            导出查询结果
+            导出CSV
           </button>
         </Form>
       </div>
 
-      <div className="mt-8 flow-root">
-        <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-          <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-            <table className="min-w-full divide-y divide-gray-700">
-              <thead>
-                <tr>
-                  <th className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-white sm:pl-0">设备名称</th>
-                  <th className="px-3 py-3.5 text-left text-sm font-semibold text-white">设备编号</th>
-                  <th className="px-3 py-3.5 text-left text-sm font-semibold text-white">类型</th>
-                  <th className="px-3 py-3.5 text-left text-sm font-semibold text-white">位置</th>
-                  <th className="px-3 py-3.5 text-left text-sm font-semibold text-white">状态</th>
-                  <th className="px-3 py-3.5 text-left text-sm font-semibold text-white">更新时间</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-800">
-                {devices.map((device) => (
-                  <tr key={device.id}>
-                    <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-white sm:pl-0">
-                      {device.name}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">{device.serialNumber}</td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">{device.type}</td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">{device.location}</td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm">
-                      <span className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${statusColors[device.status as keyof typeof statusColors]}`}>
-                        {statusText[device.status as keyof typeof statusText]}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
-                      {new Date(device.updatedAt).toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      {/* 分页 */}
-      <div className="mt-4 flex items-center justify-between">
-        <div>
-          <p className="text-sm text-gray-300">
-            显示第 <span className="font-medium">{(pagination.page - 1) * pagination.pageSize + 1}</span> 到{" "}
-            <span className="font-medium">
-              {Math.min(pagination.page * pagination.pageSize, pagination.total)}
-            </span>{" "}
-            条，共 <span className="font-medium">{pagination.total}</span> 条
-          </p>
-        </div>
-        <div>
-          <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-            {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((pageNumber) => {
-              const newSearchParams = new URLSearchParams(searchParams);
-              newSearchParams.set("page", pageNumber.toString());
-              return (
-                <a
-                  key={pageNumber}
-                  href={`?${newSearchParams.toString()}`}
-                  className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
-                    pageNumber === pagination.page
-                      ? "bg-gray-700 text-white"
-                      : "text-gray-400 hover:bg-gray-700"
-                  } focus:z-20 focus:outline-offset-0`}
+      <div className="space-y-8">
+        {/* 查询表单 */}
+        <div className="bg-gray-800/50 rounded-lg p-6 border border-gray-700">
+          <h2 className="text-lg font-medium text-white mb-4">筛选条件</h2>
+          <Form method="get" className="space-y-4">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+              <div>
+                <label htmlFor="primaryTagId" className="block text-sm font-medium text-gray-300">
+                  一级标签
+                </label>
+                <select
+                  id="primaryTagId"
+                  name="primaryTagId"
+                  value={selectedPrimaryTagId}
+                  onChange={(e) => {
+                    const params = new URLSearchParams(searchParams);
+                    params.set("primaryTagId", e.target.value);
+                    params.delete("secondaryTagId");
+                    setSearchParams(params);
+                  }}
+                  className="mt-1 block w-full rounded-md border-0 bg-gray-900/50 py-1.5 text-white shadow-sm ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6 [&>option]:text-gray-900"
                 >
-                  {pageNumber}
-                </a>
-              );
-            })}
-          </nav>
+                  <option value="">全部</option>
+                  {primaryTags.map((tag) => (
+                    <option key={tag.id} value={tag.id}>
+                      {tag.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="secondaryTagId" className="block text-sm font-medium text-gray-300">
+                  二级标签
+                </label>
+                <select
+                  id="secondaryTagId"
+                  name="secondaryTagId"
+                  value={selectedSecondaryTagId}
+                  onChange={(e) => {
+                    const params = new URLSearchParams(searchParams);
+                    params.set("secondaryTagId", e.target.value);
+                    setSearchParams(params);
+                  }}
+                  className="mt-1 block w-full rounded-md border-0 bg-gray-900/50 py-1.5 text-white shadow-sm ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6 [&>option]:text-gray-900"
+                  disabled={!selectedPrimaryTagId}
+                >
+                  <option value="">全部</option>
+                  {selectedPrimaryTag?.secondaryTags.map((tag) => (
+                    <option key={tag.id} value={tag.id}>
+                      {tag.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="location" className="block text-sm font-medium text-gray-300">
+                  存放地点
+                </label>
+                <select
+                  id="location"
+                  name="location"
+                  value={selectedLocation}
+                  onChange={(e) => {
+                    const params = new URLSearchParams(searchParams);
+                    params.set("location", e.target.value);
+                    setSearchParams(params);
+                  }}
+                  className="mt-1 block w-full rounded-md border-0 bg-gray-900/50 py-1.5 text-white shadow-sm ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6 [&>option]:text-gray-900"
+                >
+                  <option value="">全部</option>
+                  {locations.map((location) => (
+                    <option key={location} value={location}>
+                      {location}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </Form>
+        </div>
+
+        {/* 查询结果 */}
+        <div className="space-y-6">
+          {Object.entries(devicesByLocation).map(([location, devices]) => (
+            <div key={location} className="bg-gray-800/50 rounded-lg p-6 border border-gray-700">
+              <h2 className="text-lg font-medium text-white mb-4">
+                {location} ({devices.length}台设备)
+              </h2>
+              <div className="overflow-x-auto">
+                <div className="inline-block min-w-full align-middle">
+                  <div className="overflow-hidden shadow-sm ring-1 ring-gray-700 ring-opacity-50 rounded-lg">
+                    <table className="min-w-full divide-y divide-gray-700">
+                      <thead className="bg-gray-800">
+                        <tr>
+                          <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-white sm:pl-6">
+                            设备名称
+                          </th>
+                          <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-white">
+                            序列号
+                          </th>
+                          <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-white">
+                            一级标签
+                          </th>
+                          <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-white">
+                            二级标签
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-700 bg-gray-900/50">
+                        {devices.map((device) => (
+                          <tr key={device.id} className="hover:bg-gray-800/50">
+                            <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-white sm:pl-6">
+                              {device.name}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
+                              {device.serialNumber}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
+                              {device.primaryTag.name}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
+                              {device.secondaryTag.name}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
