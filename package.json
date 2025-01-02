@@ -3,44 +3,35 @@
   "private": true,
   "sideEffects": false,
   "type": "module",
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
-  },
   "scripts": {
     "build": "remix vite:build",
     "dev": "remix vite:dev",
     "lint": "eslint --ignore-path .gitignore --cache --cache-location ./node_modules/.cache/eslint .",
     "start": "remix-serve ./build/server/index.js",
-    "typecheck": "tsc",
-    "seed": "prisma db seed"
+    "typecheck": "tsc"
   },
   "dependencies": {
-    "antd": "^5.22.7",
-    "@prisma/client": "^5.10.2",
-    "@remix-run/node": "^2.15.2",
-    "@remix-run/react": "^2.15.2",
-    "@remix-run/serve": "^2.15.2",
-    "@tanstack/react-virtual": "^3.11.2",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "sql.js-httpvfs": "^0.8.12",
-    "sqlite3": "^5.1.7"
+    "antd": "5.12.5",
+    "@remix-run/node": "2.3.1",
+    "@remix-run/react": "2.3.1",
+    "@remix-run/serve": "2.3.1",
+    "@tanstack/react-virtual": "3.0.1",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
   },
   "devDependencies": {
-    "@remix-run/dev": "^2.15.2",
-    "@types/react": "^18.2.20",
-    "@types/react-dom": "^18.2.7",
-    "eslint": "^8.57.0",
-    "eslint-plugin-react": "^7.33.2",
-    "eslint-plugin-react-hooks": "^4.6.0",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.17",
-    "prisma": "^5.10.2",
-    "tsx": "^4.19.2",
-    "typescript": "^5.1.6",
-    "vite": "^5.1.0",
-    "vite-tsconfig-paths": "^4.2.1"
+    "@remix-run/dev": "2.3.1",
+    "@types/react": "18.2.20",
+    "@types/react-dom": "18.2.7",
+    "eslint": "8.56.0",
+    "eslint-plugin-react": "7.33.2",
+    "eslint-plugin-react-hooks": "4.6.0",
+    "autoprefixer": "10.4.16",
+    "postcss": "8.4.32",
+    "tailwindcss": "3.4.0",
+    "typescript": "5.1.6",
+    "vite": "5.0.10",
+    "vite-tsconfig-paths": "4.2.1"
   },
   "engines": {
     "node": ">=20.0.0"
