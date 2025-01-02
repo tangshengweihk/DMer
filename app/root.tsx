@@ -32,15 +32,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function App() {
   return (
-    <html lang="zh" className="h-full">
+    <html lang="zh" className="h-full bg-[#020817]">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>设备管理系统</title>
         <Meta />
         <Links />
       </head>
-      <body className="h-full">
-        <div id="app" className="h-full">
+      <body className="h-full text-gray-100">
+        <div className="min-h-full">
           <Outlet />
         </div>
         <ScrollRestoration />

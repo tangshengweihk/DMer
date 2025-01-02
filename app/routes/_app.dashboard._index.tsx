@@ -1,19 +1,11 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useLoaderData, useSearchParams } from "@remix-run/react";
 import { db } from "~/utils/db.server";
 import { requireUser } from "~/utils/auth.server";
 
 interface LoaderData {
   totalDevices: number;
-  devicesByLocation: Array<{
-    location: string;
-    count: number;
-  }>;
-  devicesByPrimaryTag: Array<{
-    tagName: string;
-    count: number;
-  }>;
-  recentDevices: Array<{
+  devices: Array<{
     id: number;
     name: string;
     serialNumber: string;
@@ -26,13 +18,41 @@ interface LoaderData {
     };
     createdAt: string;
   }>;
+  currentPage: number;
+  totalPages: number;
+  devicesByLocation: Array<{
+    location: string;
+    count: number;
+  }>;
+  devicesByPrimaryTag: Array<{
+    tagName: string;
+    count: number;
+  }>;
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
 
-  const [totalDevices, devicesByLocation, devicesByPrimaryTag, recentDevices] = await Promise.all([
+  const url = new URL(request.url);
+  const page = parseInt(url.searchParams.get("page") || "1", 10);
+  const pageSize = 100;
+  const skip = (page - 1) * pageSize;
+
+  const [totalDevices, devices, devicesByLocation, devicesByPrimaryTag] = await Promise.all([
     db.device.count(),
+    db.device.findMany({
+      skip,
+      take: pageSize,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        primaryTag: {
+          select: { name: true },
+        },
+        secondaryTag: {
+          select: { name: true },
+        },
+      },
+    }),
     db.device.groupBy({
       by: ['location'],
       _count: true,
@@ -58,30 +78,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
       );
       return tagCounts;
     }),
-    db.device.findMany({
-      take: 5,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        primaryTag: {
-          select: { name: true },
-        },
-        secondaryTag: {
-          select: { name: true },
-        },
-      },
-    }),
   ]);
 
   return json<LoaderData>({
     totalDevices,
+    devices: devices.map(device => ({
+      ...device,
+      createdAt: device.createdAt.toISOString(),
+    })),
+    currentPage: page,
+    totalPages: Math.ceil(totalDevices / pageSize),
     devicesByLocation,
     devicesByPrimaryTag,
-    recentDevices,
   });
 }
 
 export default function DashboardIndex() {
-  const { totalDevices, devicesByLocation, devicesByPrimaryTag, recentDevices } = useLoaderData<typeof loader>();
+  const { totalDevices, devices, currentPage, totalPages, devicesByLocation, devicesByPrimaryTag } = useLoaderData<typeof loader>();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const handlePageChange = (newPage: number) => {
+    setSearchParams(prev => {
+      prev.set("page", newPage.toString());
+      return prev;
+    });
+  };
 
   return (
     <div className="p-6 space-y-8">
@@ -125,9 +146,9 @@ export default function DashboardIndex() {
         </div>
       </div>
 
-      {/* 最近添加的设备 */}
+      {/* 设备列表 */}
       <div className="bg-gray-800/50 rounded-lg p-6 border border-gray-700">
-        <h2 className="text-lg font-medium text-white mb-4">最近添加的设备</h2>
+        <h2 className="text-lg font-medium text-white mb-4">设备列表</h2>
         <div className="overflow-x-auto">
           <div className="inline-block min-w-full align-middle">
             <div className="overflow-hidden shadow-sm ring-1 ring-gray-700 ring-opacity-50 rounded-lg">
@@ -152,7 +173,7 @@ export default function DashboardIndex() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-700 bg-gray-900/50">
-                  {recentDevices.map((device) => (
+                  {devices.map((device) => (
                     <tr key={device.id} className="hover:bg-gray-800/50">
                       <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-white sm:pl-6">
                         {device.name}
@@ -174,6 +195,32 @@ export default function DashboardIndex() {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+
+        {/* 分页控件 */}
+        <div className="mt-4 flex items-center justify-between">
+          <div className="text-sm text-gray-400">
+            显示 {(currentPage - 1) * 100 + 1}-{Math.min(currentPage * 100, totalDevices)} 条，共 {totalDevices} 条
+          </div>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="px-3 py-1 text-sm text-gray-300 hover:text-white hover:bg-gray-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              上一页
+            </button>
+            <span className="px-3 py-1 text-sm text-gray-300">
+              第 {currentPage} 页，共 {totalPages} 页
+            </span>
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1 text-sm text-gray-300 hover:text-white hover:bg-gray-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              下一页
+            </button>
           </div>
         </div>
       </div>
