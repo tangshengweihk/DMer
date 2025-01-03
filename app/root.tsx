@@ -1,3 +1,5 @@
+import type { LinksFunction, LoaderFunctionArgs } from "@remix-run/node";
+import { json, redirect } from "@remix-run/node";
 import {
   Links,
   Meta,
@@ -5,10 +7,10 @@ import {
   Scripts,
   ScrollRestoration,
 } from "@remix-run/react";
-import type { LinksFunction } from "@remix-run/node";
-import "./tailwind.css";
-import { json, redirect, type LoaderFunctionArgs } from "@remix-run/node";
 import { getUserId, getUserType } from "~/utils/session.server";
+import "./tailwind.css";
+import { ConfigProvider } from "antd";
+import "antd/dist/reset.css";
 
 export const links: LinksFunction = () => {
   return [];
@@ -18,6 +20,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await getUserId(request);
   const url = new URL(request.url);
   
+  if (url.pathname === "/") {
+    return redirect("/dashboard");
+  }
+
   if (!userId && url.pathname !== "/login") {
     throw redirect("/login");
   }
@@ -32,18 +38,23 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function App() {
   return (
-    <html lang="zh" className="h-full bg-[#020817]">
+    <html lang="zh">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <title>设备管理系统</title>
         <Meta />
         <Links />
       </head>
-      <body className="h-full text-gray-100">
-        <div className="min-h-full">
+      <body>
+        <ConfigProvider
+          theme={{
+            token: {
+              colorPrimary: '#1677ff',
+            },
+          }}
+        >
           <Outlet />
-        </div>
+        </ConfigProvider>
         <ScrollRestoration />
         <Scripts />
       </body>

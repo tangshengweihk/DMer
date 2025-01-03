@@ -39,6 +39,7 @@ model DeviceLog {
   userId    Int
   action    String
   details   String
+  level     String   @default("INFO")
   createdAt DateTime @default(now())
   device    Device   @relation(fields: [deviceId], references: [id])
   user      User     @relation(fields: [userId], references: [id])
@@ -74,4 +75,4 @@ model DeviceCount {
   updatedAt   DateTime @updatedAt
 
   @@unique([deviceName, location])
-} 
+}

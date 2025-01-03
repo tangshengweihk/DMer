@@ -18,7 +18,17 @@ export async function requireUser(request: Request) {
 export async function requireAdmin(request: Request) {
   const user = await requireUser(request);
   
-  if (user.user_type !== "admin") {
+  if (user.user_type !== "super_admin" && user.user_type !== "admin") {
+    throw new Response("Unauthorized", { status: 403 });
+  }
+
+  return user;
+}
+
+export async function requireSuperAdmin(request: Request) {
+  const user = await requireUser(request);
+  
+  if (user.user_type !== "super_admin") {
     throw new Response("Unauthorized", { status: 403 });
   }
 

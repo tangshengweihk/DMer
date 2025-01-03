@@ -43,63 +43,47 @@ export default function Login() {
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#020817] text-white">
       <div className="w-full max-w-md space-y-8 p-8">
         <div className="text-center">
-          <h1 className="text-5xl font-bold" style={{
-            background: 'linear-gradient(90deg, rgb(0, 145, 255) 0%, rgb(0, 255, 119) 20%, rgb(255, 226, 0) 40%, rgb(255, 0, 179) 60%, rgb(255, 0, 255) 80%, rgb(0, 145, 255) 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundSize: '200% auto',
-            animation: 'shine 4s linear infinite',
-            textShadow: '0 0 30px rgba(255, 255, 255, 0.1)'
-          }}>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
             设备管理系统
           </h1>
+          <p className="mt-2 text-gray-400">请登录以继续</p>
         </div>
         
-        <Form 
-          method="post" 
-          className="mt-12 space-y-8 bg-[#0f172a] p-8 rounded-2xl shadow-2xl border border-gray-800"
-          style={{
-            boxShadow: '0 0 40px rgba(255, 255, 255, 0.03)'
-          }}
-        >
+        <Form method="post" className="mt-8 space-y-6 bg-[#0f172a] p-6 rounded-lg shadow-xl">
           <input type="hidden" name="redirectTo" value={redirectTo} />
           
-          <div className="space-y-6">
+          <div className="space-y-4">
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-2">
+              <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-1">
                 用户名
               </label>
-              <div className="relative">
-                <input
-                  id="username"
-                  name="username"
-                  type="text"
-                  required
-                  className="w-full px-4 py-3 bg-[#1e293b] border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0091ff] focus:border-transparent transition-all"
-                  placeholder="请输入用户名"
-                />
-              </div>
+              <input
+                id="username"
+                name="username"
+                type="text"
+                required
+                className="w-full px-4 py-2 bg-[#1e293b] border border-gray-700 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="请输入用户名"
+              />
             </div>
             
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">
                 密码
               </label>
-              <div className="relative">
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  className="w-full px-4 py-3 bg-[#1e293b] border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0091ff] focus:border-transparent transition-all"
-                  placeholder="请输入密码"
-                />
-              </div>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                className="w-full px-4 py-2 bg-[#1e293b] border border-gray-700 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="请输入密码"
+              />
             </div>
           </div>
 
           {actionData?.error && (
-            <div className="text-red-400 text-sm text-center bg-red-900/50 p-3 rounded-lg border border-red-800">
+            <div className="text-red-400 text-sm text-center bg-red-900/50 p-2 rounded">
               {actionData.error}
             </div>
           )}
@@ -107,26 +91,13 @@ export default function Login() {
           <div>
             <button
               type="submit"
-              className="relative w-full py-3 px-4 rounded-lg font-medium text-white overflow-hidden transition-all hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0091ff] focus:ring-offset-[#0f172a]"
-              style={{
-                background: 'linear-gradient(90deg, rgb(0, 145, 255) 0%, rgb(0, 255, 119) 20%, rgb(255, 226, 0) 40%, rgb(255, 0, 179) 60%, rgb(255, 0, 255) 80%, rgb(0, 145, 255) 100%)',
-                backgroundSize: '200% auto',
-                animation: 'shine 4s linear infinite'
-              }}
+              className="w-full py-2 px-4 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-md font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-[#0f172a] transition-colors"
             >
               登录
             </button>
           </div>
         </Form>
       </div>
-
-      <style>{`
-        @keyframes shine {
-          to {
-            background-position: 200% center;
-          }
-        }
-      `}</style>
     </div>
   );
 } 

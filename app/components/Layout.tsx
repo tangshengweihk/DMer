@@ -9,7 +9,7 @@ export function Layout({ children }: LayoutProps) {
   const user = useRouteLoaderData("root") as { role: string } | undefined;
 
   const navigation = [
-    { name: "数据展示", href: "/dashboard", roles: ["super_admin"] },
+    { name: "数据展示", href: "/dashboard", roles: ["super_admin", "admin", "user"] },
     { name: "设备管理", href: "/dashboard/manage", roles: ["super_admin"] },
     { name: "设备录入", href: "/dashboard/entry", roles: ["super_admin", "admin"] },
     { name: "设备查询", href: "/dashboard/search", roles: ["super_admin", "admin", "user"] },

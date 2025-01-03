@@ -83,19 +83,21 @@ export function DeviceList({ devices, onEdit }: DeviceListProps) {
                         >
                           编辑
                         </button>
-                        <button
-                          onClick={() => {
-                            const formData = new FormData();
-                            formData.append("intent", "deleteDevice");
-                            formData.append("deviceId", device.id.toString());
-                            if (confirm("确定要删除这个设备吗？")) {
-                              submit(formData, { method: "post" });
-                            }
-                          }}
-                          className="text-red-400 hover:text-red-300 transition-colors"
-                        >
-                          删除
-                        </button>
+                        <Form method="post" className="inline">
+                          <input type="hidden" name="intent" value="deleteDevice" />
+                          <input type="hidden" name="deviceId" value={device.id} />
+                          <button
+                            type="submit"
+                            onClick={(e) => {
+                              if (!confirm("确定要删除这个设备吗？")) {
+                                e.preventDefault();
+                              }
+                            }}
+                            className="text-red-400 hover:text-red-300 transition-colors"
+                          >
+                            删除
+                          </button>
+                        </Form>
                       </div>
                     </td>
                   </tr>

@@ -11,16 +11,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return json({ userType });
 }
 
-export default function AppLayout() {
+export default function DashboardLayout() {
   const location = useLocation();
   const { userType } = useLoaderData<typeof loader>();
 
   const navItems = [
-    {
-      to: "/dashboard",
-      label: "数据展示",
-      allowedTypes: ["super_admin", "admin", "user"]
-    },
     {
       to: "/dashboard/devices",
       label: "设备管理",
@@ -39,37 +34,26 @@ export default function AppLayout() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#020817]">
-      <nav className="bg-[#0f172a] border-b border-gray-800">
+    <>
+      <nav className="bg-[#0f172a] shadow-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex">
               <div className="flex-shrink-0 flex items-center">
-                <Link 
-                  to="/dashboard" 
-                  className="text-2xl font-bold"
-                  style={{
-                    background: 'linear-gradient(90deg, rgb(0, 145, 255) 0%, rgb(0, 255, 119) 20%, rgb(255, 226, 0) 40%, rgb(255, 0, 179) 60%, rgb(255, 0, 255) 80%, rgb(0, 145, 255) 100%)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    backgroundSize: '200% auto',
-                    animation: 'shine 4s linear infinite',
-                    textShadow: '0 0 30px rgba(255, 255, 255, 0.1)'
-                  }}
-                >
+                <Link to="/dashboard" className="text-xl font-bold bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
                   设备管理系统
                 </Link>
               </div>
               <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
                 {navItems.map(item => 
-                  item.allowedTypes.includes(userType || '') && (
+                  item.allowedTypes.includes(userType) && (
                     <Link
                       key={item.to}
                       to={item.to}
-                      className={`inline-flex items-center px-4 pt-1 text-sm font-medium border-b-2 transition-all
-                        ${location.pathname === item.to || (item.to !== "/dashboard" && location.pathname.startsWith(item.to))
-                          ? "border-[#0091ff] text-white"
-                          : "border-transparent text-gray-300 hover:text-white hover:border-gray-300"
+                      className={`inline-flex items-center px-1 pt-1 text-sm font-medium
+                        ${location.pathname.startsWith(item.to)
+                          ? "text-blue-400 border-b-2 border-blue-400"
+                          : "text-gray-300 hover:text-gray-100 hover:border-b-2 hover:border-gray-300"
                         }`}
                     >
                       {item.label}
@@ -82,7 +66,7 @@ export default function AppLayout() {
               <Form action="/logout" method="post">
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm text-gray-300 hover:text-white rounded-lg transition-all hover:bg-[#1e293b]"
+                  className="px-4 py-2 text-sm text-gray-300 hover:text-white"
                 >
                   退出登录
                 </button>
@@ -97,14 +81,6 @@ export default function AppLayout() {
           <Outlet />
         </div>
       </main>
-
-      <style>{`
-        @keyframes shine {
-          to {
-            background-position: 200% center;
-          }
-        }
-      `}</style>
-    </div>
+    </>
   );
 } 

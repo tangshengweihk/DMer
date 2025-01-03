@@ -31,6 +31,7 @@ CREATE TABLE "DeviceLog" (
     "userId" INTEGER NOT NULL,
     "action" TEXT NOT NULL,
     "details" TEXT NOT NULL,
+    "level" TEXT NOT NULL DEFAULT 'INFO',
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "DeviceLog_deviceId_fkey" FOREIGN KEY ("deviceId") REFERENCES "Device" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "DeviceLog_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
